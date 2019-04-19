@@ -1,0 +1,44 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+function formatStats(path, stats) {
+    return "  File: \u2018" + path + "\u2019\n  Size: " + stats.size + "      \tBlocks: " + stats.blocks + "          IO Block: " + stats.blksize + "\nDevice: " + stats.dev + "\tInode: " + stats.ino + "  Links: " + stats.nlink + "\nAccess: " + stats.mode + "  Uid: " + stats.uid + "   Gid: " + stats.gid + "\nAccess: " + stats.atime + "\nModify: " + stats.mtime + "\nChange: " + stats.ctime + "\n Birth: " + stats.birthtime + "\n";
+}
+function stat(inputs, output, code) {
+    'use strict';
+    if (!inputs || !inputs.length) {
+        process.exit(code);
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    if (!current) {
+        setTimeout(stat, 0, inputs, output, code);
+        return;
+    }
+    fs.stat(current, function (err, stats) {
+        if (err) {
+            process.stderr.write('ERROR: ' + err, writeCompleted);
+            return;
+        }
+        output.write(formatStats(current, stats), writeCompleted);
+        function writeCompleted() {
+            setTimeout(stat, 0, inputs, output, code);
+        }
+    });
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    if (!args.length) {
+        process.stderr.write(pathToScript + ': missing operand\n', function () {
+            process.exit(1);
+        });
+        return;
+    }
+    setTimeout(stat, 0, args, process.stdout, 0);
+}
+main();

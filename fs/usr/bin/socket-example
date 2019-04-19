@@ -1,0 +1,34 @@
+#!/usr/bin/env node
+'use strict';
+var child_process_1 = require('child_process');
+var net_1 = require('net');
+function main() {
+    var serverFinished = false;
+    var clientFinished = false;
+    var server = child_process_1.spawn('usr/bin/hello-socket', [], { stdio: [0, 1, 2] });
+    server.on('error', function (err) {
+        process.stderr.write('error: ' + err + '\n', function () {
+            serverFinished = true;
+            if (clientFinished)
+                return process.exit(0);
+        });
+    });
+    server.on('exit', function () {
+        serverFinished = true;
+        if (clientFinished)
+            return process.exit(0);
+    });
+    setTimeout(client, 1000);
+    function client() {
+        var client = net_1.connect({ port: 7000 }, function () {
+            process.stdout.write('connected to server!\n');
+        });
+        client.on('data', function (data) {
+            process.stdout.write('client got: ' + data.toString().trim() + '\n');
+            clientFinished = true;
+            if (serverFinished)
+                return process.exit(0);
+        });
+    }
+}
+main();

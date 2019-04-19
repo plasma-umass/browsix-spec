@@ -1,0 +1,40 @@
+#!/bin/bash
+
+
+
+size='ref'
+benchmarks='bzip2 mcf gobmk sjeng libquantum h264ref omnetpp astar milc namd soplex povray lbm sphinx3'
+
+while (( $# > 0 )); do
+    arg="$1"
+    shift
+    case $arg in
+    -size=*)
+        size="${arg:6}"
+        ;;
+    -benchmark=*)
+        benchmarks="${arg:11}"
+        ;;
+    -no-create)
+        create='no'
+        ;;
+    -*)
+        echo "unknown flag: $arg"
+        exit 1
+        ;;
+    *)
+        echo "unknown arg: $arg"
+        exit 1
+        ;;
+    esac
+done
+
+if [ ! -e shrc ]; then
+    echo "not in CPU2006 directory?"
+    exit 1
+fi
+
+. shrc
+
+
+reportspec --size=$size --iterations=1 --tune=base --noreportable --fake  $benchmarks

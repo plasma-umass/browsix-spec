@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+function tee(current, outputs, code) {
+    current.on('readable', function () {
+        var buf = current.read();
+        if (buf !== null)
+            for (var i = 0; i < outputs.length; i++) {
+                outputs[i].write(buf);
+            }
+    });
+    current.on('end', function () {
+        var outstanding = outputs.length;
+        for (var i = 0; i < outputs.length; i++) {
+            outputs[i].end(undefined, undefined, function () {
+                outstanding--;
+                if (!outstanding)
+                    process.exit(code);
+            });
+        }
+    });
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    if (!args.length) {
+        setTimeout(tee, 0, process.stdin, [process.stdout], code);
+    }
+    else {
+        var files_1 = [];
+        files_1.push(process.stdout);
+        var opened_1 = 0;
+        args.map(function (path, i) {
+            fs.open(path, 'w', function (err, fd) {
+                if (err) {
+                    files_1[i + 1] = null;
+                    code = 1;
+                    process.stderr.write(pathToScript + ': ' + err.message + '\n');
+                }
+                else {
+                    files_1[i + 1] = fs.createWriteStream(path, { fd: fd });
+                }
+                if (++opened_1 === args.length)
+                    setTimeout(tee, 0, process.stdin, files_1, code);
+            });
+        });
+    }
+}
+main();

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+
+size='ref'
+benchmark=''
+tarfile=''
+
+while (( $# > 0 )); do
+    arg="$1"
+    shift
+    case $arg in
+    -size=*)
+        size="${arg:6}"
+        ;;
+    -benchmark=*)
+        benchmark="${arg:11}"
+        ;;
+    -*)
+        echo "unknown flag: $arg"
+        exit 1
+        ;;
+    *)
+        tarfile="$arg"
+        ;;
+    esac
+done
+
+tar --no-overwrite-dir --no-same-permissions --strip-components=1 -xf "$tarfile"

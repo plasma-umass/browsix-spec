@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+'use strict';
+var net_1 = require('net');
+function main() {
+    var server = net_1.createServer(function (socket) {
+        process.stdout.write('Connection from ' + socket.remoteAddress + '\n');
+        socket.end("Hello World\n");
+        setTimeout(process.exit, 0);
+    });
+    server.listen(7000, 'localhost');
+    process.stdout.write('TCP server listening on port 7000 at localhost.\n');
+}
+main();

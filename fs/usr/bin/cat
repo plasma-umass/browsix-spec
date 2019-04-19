@@ -1,0 +1,125 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+var util_1 = require('util');
+function log(fmt) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    var cb = undefined;
+    if (args.length && typeof args[args.length - 1] === 'function') {
+        cb = args[args.length - 1];
+        args = args.slice(0, -1);
+    }
+    var prog = process.argv[1].split('/').slice(-1);
+    var msg = prog + ': ' + util_1.format.apply(undefined, [fmt].concat(args)) + '\n';
+    if (cb)
+        process.stderr.write(msg, cb);
+    else
+        process.stderr.write(msg);
+}
+function parseArgs(args, handlers) {
+    var ok = true;
+    var positionalArgs = args.filter(function (arg) { return arg.substring(0, 1) !== '-'; });
+    args = args.filter(function (arg) { return arg.substring(0, 1) === '-'; });
+    var errs = 0;
+    function done() {
+        errs--;
+        if (!errs)
+            process.exit(1);
+    }
+    function error() {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i - 0] = arguments[_i];
+        }
+        errs++;
+        ok = false;
+        log.apply(this, args.concat([done]));
+    }
+    function usage() {
+        errs++;
+        var prog = process.argv[1].split('/').slice(-1);
+        var flags = Object.keys(handlers).concat(['h']).sort().join('');
+        var msg = util_1.format('usage: %s [-%s] ARGS\n', prog, flags);
+        process.stderr.write(msg, done);
+    }
+    outer: for (var i = 0; i < args.length; i++) {
+        var argList = args[i].slice(1);
+        if (argList.length && argList[0] === '-') {
+            error('unknown option "%s"', args[i]);
+            continue;
+        }
+        for (var j = 0; j < argList.length; j++) {
+            var arg = argList[j];
+            if (handlers[arg]) {
+                handlers[arg]();
+            }
+            else if (arg === 'h') {
+                ok = false;
+                break outer;
+            }
+            else {
+                error('invalid option "%s"', arg);
+            }
+        }
+    }
+    if (!ok)
+        usage();
+    return [positionalArgs, ok];
+}
+function concat(inputs, output, code) {
+    if (!inputs || !inputs.length) {
+        process.exit(code);
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    if (!current) {
+        setTimeout(concat, 0, inputs, output, code);
+        return;
+    }
+    current.on('readable', function () {
+        var buf = current.read();
+        if (buf !== null)
+            output.write(buf);
+    });
+    current.on('end', function () {
+        setTimeout(concat, 0, inputs, output, code);
+    });
+}
+function main() {
+    var _a = parseArgs(process.argv.slice(2), {}), args = _a[0], ok = _a[1];
+    if (!ok)
+        return;
+    var code = 0;
+    if (!args.length) {
+        setTimeout(concat, 0, [process.stdin], process.stdout, code);
+    }
+    else {
+        var files_1 = [];
+        var opened_1 = 0;
+        args.map(function (path, i) {
+            if (path === '-') {
+                files_1[i] = process.stdin;
+                if (++opened_1 === args.length)
+                    setTimeout(concat, 0, files_1, process.stdout, code);
+                return;
+            }
+            fs.open(path, 'r', function (err, fd) {
+                if (err) {
+                    files_1[i] = null;
+                    code = 1;
+                    log(err.message);
+                }
+                else {
+                    files_1[i] = fs.createReadStream(path, { fd: fd });
+                }
+                if (++opened_1 === args.length)
+                    setTimeout(concat, 0, files_1, process.stdout, code);
+            });
+        });
+    }
+}
+main();

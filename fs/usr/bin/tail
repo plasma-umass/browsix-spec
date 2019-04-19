@@ -1,0 +1,85 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+var readline = require('readline');
+function tail(inputs, output, numlines, code) {
+    'use strict';
+    if (!inputs || !inputs.length) {
+        process.exit(code);
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    var n = 0;
+    var outstanding = 0;
+    var linebuffer = [];
+    if (!current) {
+        setTimeout(tail, 0, inputs, output, numlines, code);
+        return;
+    }
+    current.on('readable', function () {
+        var rl = readline.createInterface({
+            input: current,
+            output: null
+        });
+        rl.on('line', function (line) {
+            n++;
+            linebuffer.push(line);
+            if (n > numlines) {
+                linebuffer.shift();
+            }
+        });
+    });
+    current.on('end', function () {
+        outstanding = linebuffer.length;
+        for (var i = 0; i < linebuffer.length; i++) {
+            output.write(linebuffer[i] + "\n", function () {
+                outstanding--;
+                if (!outstanding)
+                    process.exit(0);
+            });
+        }
+    });
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    var def_numlines = 10;
+    var numlines = def_numlines;
+    if (args.length && args[0] === '-n') {
+        numlines = +args[1];
+        args = args.slice(2);
+    }
+    if (!args.length) {
+        setTimeout(tail, 0, [process.stdin], process.stdout, numlines, code);
+    }
+    else {
+        var files_1 = [];
+        var opened_1 = 0;
+        args.map(function (path, i) {
+            if (path === '-') {
+                files_1[i] = process.stdin;
+                if (++opened_1 === args.length)
+                    setTimeout(tail, 0, files_1, process.stdout, numlines, code);
+                return;
+            }
+            fs.open(path, 'r', function (err, fd) {
+                if (err) {
+                    files_1[i] = null;
+                    code = 1;
+                    process.stderr.write(pathToScript + ': ' + err.message + '\n');
+                }
+                else {
+                    files_1[i] = fs.createReadStream(path, { fd: fd });
+                }
+                if (++opened_1 === args.length)
+                    setTimeout(tail, 0, files_1, process.stdout, numlines, code);
+            });
+        });
+    }
+}
+main();

@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+'use strict';
+var util_1 = require('util');
+function log(fmt) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    var cb = undefined;
+    if (args.length && typeof args[args.length - 1] === 'function') {
+        cb = args[args.length - 1];
+        args = args.slice(0, -1);
+    }
+    var prog = process.argv[1].split('/').slice(-1);
+    var msg = prog + ': ' + util_1.format.apply(undefined, [fmt].concat(args)) + '\n';
+    if (cb)
+        process.stderr.write(msg, cb);
+    else
+        process.stderr.write(msg);
+}
+function parseArgs(args, handlers) {
+    var ok = true;
+    var positionalArgs = args.filter(function (arg) { return arg.substring(0, 1) !== '-'; });
+    args = args.filter(function (arg) { return arg.substring(0, 1) === '-'; });
+    var errs = 0;
+    function done() {
+        errs--;
+        if (!errs)
+            process.exit(1);
+    }
+    function error() {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i - 0] = arguments[_i];
+        }
+        errs++;
+        ok = false;
+        log.apply(this, args.concat([done]));
+    }
+    function usage() {
+        errs++;
+        var prog = process.argv[1].split('/').slice(-1);
+        var flags = Object.keys(handlers).concat(['h']).sort().join('');
+        var msg = util_1.format('usage: %s [-%s] ARGS\n', prog, flags);
+        process.stderr.write(msg, done);
+    }
+    outer: for (var i = 0; i < args.length; i++) {
+        var argList = args[i].slice(1);
+        if (argList.length && argList[0] === '-') {
+            error('unknown option "%s"', args[i]);
+            continue;
+        }
+        for (var j = 0; j < argList.length; j++) {
+            var arg = argList[j];
+            if (handlers[arg]) {
+                handlers[arg]();
+            }
+            else if (arg === 'h') {
+                ok = false;
+                break outer;
+            }
+            else {
+                error('invalid option "%s"', arg);
+            }
+        }
+    }
+    if (!ok)
+        usage();
+    return [positionalArgs, ok];
+}
+function main() {
+    var trailingNewline = true;
+    var _a = parseArgs(process.argv.slice(2), {
+        'n': function () { return trailingNewline = false; },
+    }), args = _a[0], ok = _a[1];
+    if (!ok)
+        return;
+    var out = '';
+    for (var i = 0; i < args.length; i++) {
+        if (i !== 0)
+            out += ' ';
+        out += args[i];
+    }
+    if (trailingNewline)
+        out += '\n';
+    process.stdout.write(out, 'utf-8', function (err) {
+        var code = 0;
+        if (err) {
+            code = -1;
+            log(err.message, function () { process.exit(code); });
+            return;
+        }
+        process.exit(code);
+    });
+}
+main();

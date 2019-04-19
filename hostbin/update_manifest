@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#echo "$(md5sum bin/reportspec | cut -d ' ' -f 1)" '*' "$(wc -c bin/reportspec | cut -d ' ' -f 1 | xargs python -c 'import sys; print("000" + hex(int(sys.argv[1]))[2:])')" bin/reportspec
+
+#F="bin/reportspec"
+F="bin/benchmark.pm"
+
+cat MANIFEST | grep -v $F >MANIFEST2
+echo "$(md5sum $F | cut -d ' ' -f 1)" '*' "$(wc -c $F | cut -d ' ' -f 1 | xargs python -c 'import sys; print("000" + hex(int(sys.argv[1]))[2:]).upper()')" "$F" >>MANIFEST2
+mv MANIFEST2 MANIFEST

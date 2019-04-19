@@ -1,0 +1,117 @@
+#!/bin/bash
+set -e
+
+size='test'
+
+while (( $# > 0 )); do
+    arg="$1"
+    shift
+    case $arg in
+    -size=*)
+        size="${arg:6}"
+        ;;
+    -*)
+        echo "unknown flag: $arg"
+        exit 1
+        ;;
+    *)
+        echo "unknown arg: $arg"
+        exit 1
+        ;;
+    esac
+done
+
+
+WORKLOAD=$size
+
+# from https://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+BROWSIX_DIST="$HOME/plasma/browsix/dist"
+
+#rm -rf "$DIR/app"
+rm -rf "$DIR/fs"
+
+mkdir -p "$DIR/app/bower_components"
+
+for f in elements favicon.ico images styles; do
+	cp -r "$BROWSIX_DIST/$f" "$DIR/app"
+done
+
+cp -r "$BROWSIX_DIST/fs" "$DIR/fs"
+
+for f in webcomponentsjs iron-flex-layout paper-material paper-styles polymer polymer-ts; do
+	cp -r "$BROWSIX_DIST/bower_components/$f" "$DIR/app/bower_components"
+done
+
+# where we are going to copy the stuff into
+TARGET="$DIR/fs/spec"
+
+rm -rf "$TARGET"
+
+SUFFIX="browsix-asmjs"
+TUNE="base"
+
+# no bwaves - that is fortran based
+
+SBASE="/spec/cpu2006_asmjs"
+cd "$SBASE"
+. "$SBASE/shrc"
+
+for bench in bzip2 mcf gobmk sjeng libquantum h264ref omnetpp astar milc namd soplex povray lbm sphinx3; do
+
+    BBASE="$SBASE/benchspec/CPU2006"
+
+    # full benchmark name - some digits, a zero, and the ascii benchmark name
+    FBENCH="$(ls $BBASE | egrep '^[0-9]+\.' | grep $bench)"
+
+    RBASE="$BBASE/$FBENCH/run/run_${TUNE}_${WORKLOAD}_${SUFFIX}.0000"
+
+    #CFG="Browsix-js-emscripten"
+    CFG="default"
+
+    cd "$SBASE"
+
+    runspec --tune=base --action=build                    $bench
+    runspec --tune=base --size=${WORKLOAD} --action=clean $bench
+    runspec --tune=base --size=${WORKLOAD} --fake --loose $bench
+
+    RUN_DIR="$TARGET/cpu2006_asmjs/benchspec/CPU2006/$FBENCH/run"
+
+    mkdir -p "$RUN_DIR"
+
+    cp -r "$RBASE"             "$RUN_DIR"
+    cp $RBASE/../../exe/*$SUFFIX "$RUN_DIR/run_${TUNE}_${WORKLOAD}_${SUFFIX}.0000"
+    cp "$DIR/bin"/*        "$DIR/fs/usr/bin"
+
+    cd "$RUN_DIR/run_${TUNE}_${WORKLOAD}_${SUFFIX}.0000"
+
+    # fix 'bpowers' + excessive -E stuff
+
+    if [ "$(cat speccmds.cmd | cut -d ' ' -f 1 | sort -u | wc -l)" -gt "4" ]; then
+        echo >&2 "unknown commands in speccmds"
+        exit 1
+    fi
+
+    cat speccmds.cmd \
+	| egrep '^-(i|b|C|o|E (SHELL|USER|PATH|LC_))' \
+	| perl -pe 's|^-E PATH .*|-E PATH /usr/bin:/bin|' \
+	| perl -pe 's/bpowers/browsix/g' >speccmds2.cmd
+    mv speccmds2.cmd speccmds.cmd
+
+    cat compare.cmd \
+	| egrep '^-(i|c|b|C|o|E (SHELL|USER|PATH|LC_))' \
+	| perl -pe 's|^-E PATH .*|-E PATH /usr/bin:/bin|' \
+	| perl -pe 's/bpowers/browsix/g' >compare2.cmd
+    mv compare2.cmd compare.cmd
+done
+
+cd "$DIR"
+
+./xhrfs-index fs >fs/index.json
+
+
+
+# runspec --config=$CFG --size=test --noreportable --tune=base --iterations=1 bzip2
+
+## netstat -aonp4 | grep '^tcp'

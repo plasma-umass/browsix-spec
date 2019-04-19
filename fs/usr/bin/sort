@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+var readline = require('readline');
+function sort(inputs, output, code, lines) {
+    'use strict';
+    if (!inputs || !inputs.length) {
+        lines.sort();
+        output.write(lines.join('\n') + '\n', function () {
+            process.exit(code);
+        });
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    if (!current) {
+        setTimeout(sort, 0, inputs, output, code, lines);
+        return;
+    }
+    current.on('readable', function () {
+        var rl = readline.createInterface({
+            input: current,
+            output: null
+        });
+        rl.on('line', function (line) {
+            lines.push(line);
+        });
+    });
+    current.on('end', function () {
+        setTimeout(sort, 0, inputs, output, code, lines);
+    });
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    var lines = [];
+    if (!args.length) {
+        setTimeout(sort, 0, [process.stdin], process.stdout, code, lines);
+    }
+    else {
+        var files_1 = [];
+        var opened_1 = 0;
+        args.map(function (path, i) {
+            if (path === '-') {
+                files_1[i] = process.stdin;
+                if (++opened_1 === args.length)
+                    setTimeout(sort, 0, files_1, process.stdout, code, lines);
+                return;
+            }
+            fs.open(path, 'r', function (err, fd) {
+                if (err) {
+                    files_1[i] = null;
+                    code = 1;
+                    process.stderr.write(pathToScript + ': ' + err.message + '\n');
+                }
+                else {
+                    files_1[i] = fs.createReadStream(path, { fd: fd });
+                }
+                if (++opened_1 === args.length)
+                    setTimeout(sort, 0, files_1, process.stdout, code, lines);
+            });
+        });
+    }
+}
+main();

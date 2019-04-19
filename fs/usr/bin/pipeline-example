@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+'use strict';
+var child_process = require('child_process');
+var fs = require('fs');
+var node_pipe2_1 = require('node-pipe2');
+function main() {
+    'use strict';
+    var pathToScript = process.argv[1];
+    var args = process.argv.slice(2);
+    var waiting = 2;
+    var exit = 0;
+    function childFinished(err, code) {
+        if (code === void 0) { code = 0; }
+        if (err && !code)
+            code = -1;
+        waiting--;
+        if (!waiting)
+            process.exit(code);
+    }
+    node_pipe2_1.pipe2(function (perr, rfd, wfd) {
+        if (perr)
+            throw new Error('pipe2 failed: ' + perr);
+        var echo = child_process.spawn('/usr/bin/echo', ['hello world'], { stdio: [0, wfd, 2] });
+        echo.on('error', function (err) {
+            process.stderr.write('error: ' + err, function () {
+                exit = 1;
+                childFinished(err);
+            });
+        });
+        echo.on('exit', function (code) {
+            childFinished(null, code);
+        });
+        fs.close(wfd, function () {
+            var cat = child_process.spawn('/usr/bin/cat', [], { stdio: [rfd, 1, 2] });
+            cat.on('error', function (err) {
+                process.stderr.write('error: ' + err, function () {
+                    childFinished(err);
+                });
+            });
+            cat.on('exit', function (code) {
+                childFinished(null, code);
+            });
+            fs.close(rfd);
+        });
+    });
+}
+main();

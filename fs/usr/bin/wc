@@ -1,0 +1,101 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+function wc(inputs, output, opts, code) {
+    'use strict';
+    if (!inputs || !inputs.length) {
+        process.exit(code);
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    var w = 0;
+    var c = 0;
+    var l = 0;
+    if (!current) {
+        setTimeout(wc, 0, inputs, output, opts, code);
+        return;
+    }
+    current.on('readable', function () {
+        var buf = current.read();
+        if (buf !== null) {
+            c += buf.length;
+            l += (buf.toString().match(/\n/g) || []).length;
+            w += (buf.toString().match(/\S+/g) || []).length;
+        }
+    });
+    current.on('end', function () {
+        var result = '';
+        if (opts.outputLine)
+            result += l + "\t";
+        if (opts.outputWord)
+            result += w + "\t";
+        if (opts.outputChar)
+            result += c + "\t";
+        result += "\n";
+        output.write(result, function () {
+            setTimeout(wc, 0, inputs, output, opts, code);
+        });
+    });
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    var opts = { outputLine: true, outputWord: true, outputChar: true };
+    if (args.length && args[0][0] === '-') {
+        opts = { outputLine: false, outputWord: false, outputChar: false };
+        while (args.length && args[0][0] === '-') {
+            for (var i = 1; i < args[0].length; i++) {
+                switch (args[0][i]) {
+                    case "l":
+                        opts.outputLine = true;
+                        break;
+                    case "w":
+                        opts.outputWord = true;
+                        break;
+                    case "c":
+                        opts.outputChar = true;
+                        break;
+                    default:
+                        process.stderr.write(pathToScript + ': unknown flag ' + args[0], function () {
+                            process.exit(1);
+                        });
+                        return;
+                }
+            }
+            args.shift();
+        }
+    }
+    if (!args.length) {
+        setTimeout(wc, 0, [process.stdin], process.stdout, opts, code);
+    }
+    else {
+        var files_1 = [];
+        var opened_1 = 0;
+        args.map(function (path, i) {
+            if (path === '-') {
+                files_1[i] = process.stdin;
+                if (++opened_1 === args.length)
+                    setTimeout(wc, 0, files_1, process.stdout, opts, code);
+                return;
+            }
+            fs.open(path, 'r', function (err, fd) {
+                if (err) {
+                    files_1[i] = null;
+                    code = 1;
+                    process.stderr.write(pathToScript + ': ' + err.message + '\n');
+                }
+                else {
+                    files_1[i] = fs.createReadStream(path, { fd: fd });
+                }
+                if (++opened_1 === args.length)
+                    setTimeout(wc, 0, files_1, process.stdout, opts, code);
+            });
+        });
+    }
+}
+main();

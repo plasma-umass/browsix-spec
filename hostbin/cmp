@@ -1,0 +1,67 @@
+#!/bin/bash
+
+
+
+size='ref'
+benchmark=''
+failed='no'
+
+while (( $# > 0 )); do
+    arg="$1"
+    shift
+    case $arg in
+    -size=*)
+        size="${arg:6}"
+        ;;
+    -benchmark=*)
+        benchmark="${arg:11}"
+        ;;
+    -no-create)
+        create='no'
+        ;;
+    -*)
+        echo "unknown flag: $arg"
+        exit 1
+        ;;
+    *)
+        echo "unknown arg: $arg"
+        exit 1
+        ;;
+    esac
+done
+
+if [ ! -e shrc ]; then
+    echo "not in CPU2006 directory?"
+    exit 1
+fi
+
+. shrc
+
+
+dirs=''
+for d in /spec/cpu2006_asmjs/benchspec/CPU2006/*/run/run_*; do
+    if [[ ! -z $benchmark ]]; then
+	if echo $d | grep $size | grep -q $benchmark; then
+	    dirs="$dirs $d"
+	fi
+    else
+	dirs="$dirs $d"
+    fi
+done
+
+for d in $dirs; do
+    echo "dir: $d"
+    cd $d
+    specinvoke -E -d "$d" -c 1 -e compare.err -o compare.stdout -f compare.cmd
+    if [ '0' -eq "$?" ]; then
+	echo -e "\tPASSED"
+    else
+	failed='yes'
+	echo -e "\tFAILED"
+	cat "$d/compare.err"
+    fi
+done
+
+if [ $failed = 'yes' ]; then
+    exit 1
+fi

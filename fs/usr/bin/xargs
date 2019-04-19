@@ -1,0 +1,198 @@
+#!/usr/bin/env node
+'use strict';
+var child_process = require('child_process');
+var util_1 = require('util');
+var maxArgs = 10000;
+var maxChars = 4096;
+var command = 'echo';
+var comArgs = '';
+var out = '';
+var children = [];
+var delimiter = /[\s*\n*]/;
+var rflag = false;
+var tflag = false;
+var xflag = false;
+var eflag = false;
+var eofStr = '';
+var opts = {
+    encoding: 'utf8',
+    timeout: 100,
+    killSignal: 'SIGTERM',
+    stdio: [0, 1, 2]
+};
+function main() {
+    parseArgs();
+    getData();
+    return;
+}
+function getData() {
+    process.stdin.on('data', function (data) {
+        divide(data.toString('utf-8').trim().split(delimiter));
+    });
+}
+function help() {
+    var help = "Usage: xargs [OPTION]...COMMAND [INITIAL-ARGS]...\n";
+    help += "Run COMMAND with INITIAL-ARGS and more arguments read from input\n";
+    help += "\n";
+    help += "Supported options: -dEnrstx \n";
+    help += "Bugs to: r.volosatovs@student.tue.nl\n";
+    process.stderr.write(help, function () {
+        process.exit(1);
+        return;
+    });
+}
+function divide(data) {
+    var queries = [];
+    if (rflag && data.length === 0) {
+        process.exit(0);
+        return;
+    }
+    var i = 0;
+    var argsAdded = 0;
+    var charsAdded = 0;
+    var newQuery = true;
+    while (data.length > 0) {
+        if (newQuery) {
+            argsAdded = 0;
+            charsAdded = 0;
+            queries[i] = [];
+            if (comArgs.length > 0) {
+                queries[i].push(comArgs);
+                charsAdded += comArgs.length;
+            }
+            newQuery = false;
+        }
+        if (command.length + comArgs.length + 2 > maxChars) {
+            process.stderr.write("cannot fit single argument within argument list size limit\n");
+            process.exit(1);
+            return;
+        }
+        else if (command.length + comArgs.length + 2 + data[0].length > maxChars) {
+            process.stderr.write("argument line too long\n");
+            if (xflag) {
+                process.exit(1);
+                return;
+            }
+            break;
+        }
+        else if (argsAdded < maxArgs && charsAdded + 1 + data[0].length <= maxChars) {
+            var arg = data.shift();
+            queries[i].push(arg);
+            charsAdded += arg.length + 1;
+            argsAdded++;
+            if (eflag) {
+                if (arg === eofStr) {
+                    break;
+                }
+            }
+        }
+        else {
+            i++;
+            newQuery = true;
+            continue;
+        }
+    }
+    pass(0, queries);
+    return;
+}
+function pass(i, queries) {
+    if (i >= queries.length) {
+        process.stdout.write(out);
+        process.exit(0);
+        return;
+    }
+    if (tflag) {
+        process.stdout.write(command.concat(" ", queries[i].join(" "), "\n"));
+    }
+    children.push(child_process.spawn(command, queries[i], opts));
+    children[i].on('error', function (err) {
+        process.stderr.write('error: ' + err, function () {
+            process.exit(1);
+            return;
+        });
+    });
+    children[i].on('exit', function (code) {
+        if (code !== 0) {
+            process.stderr.write(queries[i].join(" ").concat(" exited with code ", code.toString(), "\n"), function () {
+                process.exit(1);
+                return;
+            });
+        }
+        else {
+            pass(i + 1, queries);
+        }
+    });
+}
+function parseArgs() {
+    var argv = process.argv.slice(2);
+    var i = 0;
+    while (i < argv.length && argv[i][0] === "-") {
+        groupParse: for (var j = 1; j < argv[i].length; j++) {
+            var arg = argv[i][j];
+            switch (arg) {
+                case 'n':
+                    if (argv[i].length > j + 1) {
+                        maxArgs = parseInt(argv[i].slice(j + 1), 10);
+                    }
+                    else {
+                        i++;
+                        maxArgs = parseInt(argv[i], 10);
+                    }
+                    break groupParse;
+                case 's':
+                    if (argv[i].length > j + 1) {
+                        maxChars = parseInt(argv[i].slice(j + 1), 10);
+                    }
+                    else {
+                        i++;
+                        maxChars = parseInt(argv[i], 10);
+                    }
+                    break groupParse;
+                case 'd':
+                    if (argv[i].length > j + 1) {
+                        delimiter = new RegExp(argv[i].slice(j + 1));
+                    }
+                    else {
+                        i++;
+                        delimiter = new RegExp(argv[i]);
+                    }
+                    break groupParse;
+                case 'E':
+                    eflag = true;
+                    if (argv[i].length > j + 1) {
+                        eofStr = argv[i].slice(j + 1);
+                    }
+                    else {
+                        i++;
+                        eofStr = argv[i];
+                    }
+                    break groupParse;
+                case 't':
+                    tflag = true;
+                    break;
+                case 'x':
+                    xflag = true;
+                    break;
+                case 'r':
+                    rflag = true;
+                    break;
+                case 'h':
+                    help();
+                    break;
+                default:
+                    process.stderr.write(util_1.format('unknown option %s\n', arg));
+                    help();
+            }
+        }
+        i++;
+    }
+    if (i < argv.length) {
+        command = argv[i];
+        i++;
+        if (i < argv.length) {
+            comArgs = argv.splice(i).join(" ");
+        }
+    }
+    return;
+}
+main();

@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+'use strict';
+var http = require('http');
+function main() {
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    if (!args.length) {
+        process.stderr.write('usage:\n curl URL\n', function () {
+            process.exit(1);
+        });
+        return;
+    }
+    var url = args[0];
+    var port = 80;
+    var parts = url.split('://')[1].split('/');
+    var host = parts[0];
+    var path = '/' + parts.slice(1).join('/');
+    if (host.indexOf(':') > -1) {
+        var sPort = '';
+        _a = host.split(':'), host = _a[0], sPort = _a[1];
+        port = parseInt(sPort, 10);
+    }
+    var options = {
+        host: host,
+        port: port,
+        path: path,
+    };
+    function callback(response) {
+        var chunks = [];
+        response.on('data', function (chunk) {
+            chunks.push(new Buffer(chunk));
+        });
+        response.on('end', function () {
+            var all = Buffer.concat(chunks);
+            process.stdout.write(all, function () {
+                setTimeout(process.exit, 0);
+            });
+        });
+    }
+    http.request(options, callback).end();
+    var _a;
+}
+main();

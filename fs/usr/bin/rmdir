@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+function main() {
+    'use strict';
+    var pathToScript = process.argv[1];
+    var args = process.argv.slice(2);
+    var code = 0;
+    fs.rmdir(args[0], function () {
+        process.exit(code);
+    });
+}
+main();

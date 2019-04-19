@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+'use strict';
+var child_process = require('child_process');
+var path = require('path');
+var priority = require('node-priority');
+function spawn(args, opts) {
+    var cmd = args[0];
+    if (cmd.indexOf('/') === -1)
+        cmd = '/usr/bin/' + cmd;
+    var child = child_process.spawn(cmd, args.slice(1), opts);
+    child.on('error', function (err) {
+        process.stderr.write('error: ' + err, function () {
+            process.exit(1);
+        });
+    });
+    child.on('exit', function (code) {
+        process.exit(code);
+    });
+}
+function main() {
+    'use strict';
+    var pathToScript = process.argv[1];
+    var args = process.argv.slice(2);
+    if (!args.length) {
+        priority.get(priority.Process, 0, function (err, prio) {
+            process.stdout.write('' + prio + '\n', function () {
+                process.exit(0);
+            });
+        });
+        return;
+    }
+    var val = 10;
+    if (args.length > 2 && args[0] === '-n') {
+        val = parseInt(args[1], 10);
+        args = args.slice(2);
+    }
+    if (isNaN(val)) {
+        var usage = 'usage: ' + path.basename(pathToScript) + ' -n val CMD [ARGS...]\n';
+        process.stderr.write(usage, function (err) {
+            process.exit(1);
+        });
+        return;
+    }
+    var opts = {
+        stdio: [0, 1, 2],
+    };
+    priority.get(priority.Process, 0, function (err, prio) {
+        if (err) {
+            process.stderr.write('ERROR get: ' + err, function () {
+                process.exit(1);
+            });
+            return;
+        }
+        val += prio;
+        priority.set(priority.Process, 0, val, function (serr) {
+            if (serr) {
+                process.stderr.write('ERROR set: ' + serr, function () {
+                    process.exit(1);
+                });
+                return;
+            }
+            spawn(args, opts);
+        });
+    });
+}
+main();

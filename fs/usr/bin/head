@@ -1,0 +1,89 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+var readline = require('readline');
+function head(inputs, output, numlines, code) {
+    'use strict';
+    if (!inputs || !inputs.length) {
+        process.exit(code);
+        return;
+    }
+    var current = inputs[0];
+    inputs = inputs.slice(1);
+    var closed = false;
+    var outstanding = 0;
+    function next() {
+        closed = true;
+        if (outstanding)
+            return;
+        setTimeout(head, 0, inputs, output, numlines, code);
+    }
+    function finished() {
+        outstanding--;
+        if (!outstanding && closed)
+            return next();
+    }
+    if (!current)
+        return next();
+    var n = 0;
+    current.on('readable', function () {
+        var rl = readline.createInterface({
+            input: current,
+            output: null,
+        });
+        rl.on('line', function (line) {
+            n++;
+            if (n > numlines) {
+                rl.close();
+                next();
+            }
+            else {
+                outstanding++;
+                output.write(line + '\n', finished);
+            }
+        });
+    });
+    current.on('end', next);
+}
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    var defaultLimit = 10;
+    var limit = defaultLimit;
+    if (args.length && args[0] === '-n') {
+        limit = +args[1];
+        args = args.slice(2);
+    }
+    if (!args.length)
+        args = ['-'];
+    var files = [];
+    var nOpened = 0;
+    function opened() {
+        nOpened++;
+        if (nOpened === args.length)
+            setTimeout(head, 0, files, process.stdout, limit, code);
+    }
+    args.map(function (path, i) {
+        if (path === '-') {
+            files[i] = process.stdin;
+            opened();
+            return;
+        }
+        fs.open(path, 'r', function (err, fd) {
+            if (err) {
+                files[i] = null;
+                code = 1;
+                var msg = pathToScript + ': ' + err.message + '\n';
+                process.stderr.write(msg, opened);
+                return;
+            }
+            files[i] = fs.createReadStream(path, { fd: fd });
+            opened();
+        });
+    });
+}
+main();

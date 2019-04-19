@@ -1,0 +1,50 @@
+#!/usr/bin/env node
+'use strict';
+var fs = require('fs');
+function main() {
+    'use strict';
+    var argv = process.argv;
+    var pathToNode = argv[0];
+    var pathToScript = argv[1];
+    var args = argv.slice(2);
+    var code = 0;
+    var now = new Date();
+    var opened = 0;
+    function finished() {
+        opened++;
+        if (opened === args.length)
+            process.exit(code);
+    }
+    if (!args.length) {
+        process.stderr.write('usage:\n touch FILE\n', function () {
+            process.exit(1);
+        });
+    }
+    else {
+        args.map(function (path, i) {
+            fs.stat(path, function (err, stats) {
+                if (err) {
+                    fs.open(path, 'wx', function (oerr, fd) {
+                        if (oerr) {
+                            code = 1;
+                            var msg = pathToScript + ': ' + oerr + '\n';
+                            process.stderr.write(msg, finished);
+                        }
+                        fs.close(fd, finished);
+                    });
+                }
+                else {
+                    fs.utimes(path, now, now, function (uerr) {
+                        if (uerr) {
+                            code = 1;
+                            process.stderr.write('utimes: ' + uerr.message + '\n', finished);
+                            return;
+                        }
+                        finished();
+                    });
+                }
+            });
+        });
+    }
+}
+main();
